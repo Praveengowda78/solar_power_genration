@@ -78,25 +78,50 @@ if st.button("Predict"):
     st.write(f"### Predicted Power Generated: {predicted_value:.2f} Watts (W)")
     
     # Display feature importance
-    st.write("### Feature Importance")
-    importances = model.feature_importances_
-    feature_importances = pd.DataFrame({'Feature': features, 'Importance': importances})
-    feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
-    
+st.write("### Feature Importance")
+
+# Extract feature importances from the model
+importances = model.feature_importances_
+
+# Create a DataFrame for feature importances
+feature_importances = pd.DataFrame({'Feature': features, 'Importance': importances})
+
+# Sort the DataFrame by importance
+feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+
+# Create a bar plot for feature importance
+fig, ax = plt.subplots(figsize=(10, 6))
+sns.barplot(x='Importance', y='Feature', data=feature_importances, ax=ax, palette='viridis')
+
+# Add title and labels
+ax.set_title('Feature Importance')
+ax.set_xlabel('Importance')
+ax.set_ylabel('Feature')
+
+# Display the plot in Streamlit
+st.pyplot(fig)
+
+
+# Visualization of user input vs dataset distribution
+st.write("### User Input vs Dataset Distribution")
+
+# Loop through each feature to compare dataset distribution with user input
+for feature in features:
     fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(x='Importance', y='Feature', data=feature_importances, ax=ax, palette='viridis')
-    ax.set_title('Feature Importance')
+    
+    # Plot the dataset distribution with KDE
+    sns.histplot(data[feature], kde=True, label=f"Dataset {feature}", ax=ax, color='lightblue')
+    
+    # Plot the user input as a vertical line for visibility
+    ax.axvline(x=input_df[feature].values[0], color='darkorange', linewidth=2, label=f"User Input {feature}")
+    
+    # Set legend and title
+    ax.legend(loc='upper right')
+    ax.set_title(f"{feature} Distribution")
+    
+    # Display the plot in Streamlit
     st.pyplot(fig)
 
-    # Visualization of user input vs dataset distribution
-    st.write("### User Input vs Dataset Distribution")
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for feature in features:
-        sns.histplot(data[feature], kde=True, label=f"Dataset {feature}", ax=ax, color='lightblue')
-        sns.histplot(input_df[feature], kde=True, label=f"User Input {feature}", ax=ax, color='darkorange')
-        ax.legend(loc='upper right')
-        ax.set_title(f"{feature} Distribution")
-        st.pyplot(fig)
 
     st.write("### Prediction Explanation")
     st.markdown("""
