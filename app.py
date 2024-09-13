@@ -5,12 +5,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# Set page configuration (must be called only once and at the top)
+st.set_page_config(page_title="Solar Power Generation Prediction", layout="wide")
+
 # Load the trained model
-with open('xgb_model.pkl', 'rb') as f:
-    model = pickle.load(f)
+try:
+    with open('xgb_model.pkl', 'rb') as f:
+        model = pickle.load(f)
+except Exception as e:
+    st.error(f"Error loading model: {e}")
 
 # Load the dataset to get feature columns (without the target column)
-data = pd.read_csv("solarpowergeneration.csv")
+try:
+    data = pd.read_csv("solarpowergeneration.csv")
+except Exception as e:
+    st.error(f"Error loading dataset: {e}")
 
 # Rename columns as per the training dataset
 new_column_names = {
@@ -27,109 +36,118 @@ data = data.rename(columns=new_column_names)
 # Select feature columns (exclude 'power_generated')
 features = data.drop(columns=['power_generated']).columns
 
-# Streamlit interface
-st.set_page_config(page_title="Solar Power Generation Prediction", layout="wide")
-st.title("🌞 Solar Power Generation Prediction 🌞")
+# Page Navigation
+if "page" not in st.session_state:
+    st.session_state["page"] = "Main Page"
+    st.session_state["prediction_made"] = False
+    st.session_state["input_df"] = pd.DataFrame()
 
-st.markdown("""
-    <style>
-    .main {background-color: #f0f2f6;}
-    .sidebar .sidebar-content {background-color: #ffffff;}
-    </style>
-    """, unsafe_allow_html=True)
+# Main Page: for Prediction
+if st.session_state["page"] == "Main Page":
+    st.title("🌞 Solar Power Generation Prediction 🌞")
 
-# Create input fields for each feature
-st.write("### Enter the values for the features to predict the power generated:")
+    # Create input fields for each feature
+    st.write("### Enter the values for the features to predict the power generated:")
 
-user_input = {}
-for feature in features:
-    if feature in ['temperature', 'humidity']:
-        user_input[feature] = st.slider(f"Enter {feature}:", min_value=0, max_value=100, value=0)
-    else:
-        user_input[feature] = st.number_input(f"Enter {feature}:", value=0.0, format="%.2f")
+    user_input = {}
+    for feature in features:
+        if feature in ['temperature', 'humidity']:
+            user_input[feature] = st.slider(f"Enter {feature}:", min_value=0, max_value=100, value=0)
+        else:
+            user_input[feature] = st.number_input(f"Enter {feature}:", value=0.0, format="%.2f")
 
-# Convert user input to DataFrame
-input_df = pd.DataFrame([user_input])
+    # Convert user input to DataFrame
+    input_df = pd.DataFrame([user_input])
 
-# Predict button
-if st.button("Predict"):
-    # Predict without scaling
-    prediction = model.predict(input_df)
-    predicted_value = prediction[0]
+    # Store user input in session state
+    st.session_state["input_df"] = input_df
 
-    # Post-processing to handle specific cases
-    if np.isclose(input_df.values, 0).all():
-        predicted_value = 0.0  # Set prediction to 0 if all inputs are zero
-    
-    # Determine background color based on prediction
-    if predicted_value > 1000:  # Example threshold for "good" prediction
-        background_color = "#d4edda"  # Light green for good prediction
-    elif predicted_value < 100:  # Example threshold for "bad" prediction
-        background_color = "#f8d7da"  # Light red for bad prediction
-    else:
-        background_color = "#ffffff"  # White for normal prediction
+    # Prediction
+    if st.button("Predict"):
+        try:
+            prediction = model.predict(input_df)
+            predicted_value = prediction[0]
 
-    st.markdown(f"""
-        <style>
-        .main {{background-color: {background_color};}}
-        </style>
-        """, unsafe_allow_html=True)
-    
-    st.write(f"### Predicted Power Generated: {predicted_value:.2f} Watts (W)")
-    
-    # Display feature importance
-st.write("### Feature Importance")
+            if np.isclose(input_df.values, 0).all():
+                predicted_value = 0.0  # Set prediction to 0 if all inputs are zero
 
-# Extract feature importances from the model
-importances = model.feature_importances_
+            # Color the prediction output based on the value
+            if predicted_value > 1000:
+                prediction_color = 'green'
+            elif predicted_value < 500:
+                prediction_color = 'red'
+            else:
+                prediction_color = 'black'
 
-# Create a DataFrame for feature importances
-feature_importances = pd.DataFrame({'Feature': features, 'Importance': importances})
+            st.markdown(f"<h3 style='color:{prediction_color};'>Predicted Power Generated: {predicted_value:.2f} Watts (W)</h3>", unsafe_allow_html=True)
 
-# Sort the DataFrame by importance
-feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+            # Set flag to indicate that a prediction has been made
+            st.session_state["prediction_made"] = True
 
-# Create a bar plot for feature importance
-fig, ax = plt.subplots(figsize=(10, 6))
-sns.barplot(x='Importance', y='Feature', data=feature_importances, ax=ax, palette='viridis')
+            # Set the page to "More Information" after prediction
+            st.session_state["page"] = "More Information"
+        except Exception as e:
+            st.error(f"Error making prediction: {e}")
 
-# Add title and labels
-ax.set_title('Feature Importance')
-ax.set_xlabel('Importance')
-ax.set_ylabel('Feature')
+    # Show "More Information" button only if prediction has been made
+if st.session_state["prediction_made"]:
+    st.write("### Want to know more?")
+    st.write("Click the button below to see feature importance and visual comparisons:")
+    if st.button("More Information"):
+        st.session_state["page"] = "More Information"
 
-# Display the plot in Streamlit
-st.pyplot(fig)
+# More Information Page: for Feature Importance and User Input vs Dataset Plots
+if st.session_state["page"] == "More Information":
+    st.title("🔍 More Information - Insights and Visuals")
 
+    # Feature Importance
+    st.write("### Feature Importance")
 
-# Visualization of user input vs dataset distribution
-st.write("### User Input vs Dataset Distribution")
+    importances = model.feature_importances_
 
-# Loop through each feature to compare dataset distribution with user input
-for feature in features:
+    # Create a DataFrame for feature importances
+    feature_importances = pd.DataFrame({'Feature': features, 'Importance': importances})
+
+    # Sort the DataFrame by importance
+    feature_importances = feature_importances.sort_values(by='Importance', ascending=False)
+
+    # Create a bar plot for feature importance with a light background
     fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # Plot the dataset distribution with KDE
-    sns.histplot(data[feature], kde=True, label=f"Dataset {feature}", ax=ax, color='lightblue')
-    
-    # Plot the user input as a vertical line for visibility
-    ax.axvline(x=input_df[feature].values[0], color='darkorange', linewidth=2, label=f"User Input {feature}")
-    
-    # Set legend and title
-    ax.legend(loc='upper right')
-    ax.set_title(f"{feature} Distribution")
-    
-    # Display the plot in Streamlit
+
+    sns.barplot(x='Importance', y='Feature', data=feature_importances, ax=ax, palette='Blues_d')
+
+    # Set plot title and labels
+    ax.set_title('Feature Importance', fontsize=16, color='black')
+    ax.set_xlabel('Importance', fontsize=12, color='black')
+    ax.set_ylabel('Feature', fontsize=12, color='black')
+
     st.pyplot(fig)
 
+    # Display the User Input vs Dataset Distribution plots
+    st.write("### User Input vs Dataset Distribution")
 
-    st.write("### Prediction Explanation")
-    st.markdown("""
-    The prediction is based on the following features you have entered:
-    - **Distance to Solar Noon**: Affects the angle of sunlight reaching the panels.
-    - **Wind Direction**: Influences the cooling of solar panels and their efficiency.
-    - **Wind Speed**: Affects cooling and energy generation efficiency.
-    - **Sky Cover**: Determines the amount of sunlight reaching the panels.
-    - **Average Wind Speed (Period)**: Averages wind speed over a certain period.
-    - **Average Pressure (Period)**: Influences weather patterns affecting solar radiation.
-    """)
+    # Retrieve user input DataFrame from session state
+    input_df = st.session_state.get("input_df", pd.DataFrame())
+
+    # Loop through each feature to compare dataset distribution with user input
+    for feature in features:
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        # Plot the dataset distribution with KDE
+        sns.histplot(data[feature], kde=True, label=f"Dataset {feature}", ax=ax, color='lightblue')
+
+        # Plot the user input as a vertical line for visibility
+        if not input_df.empty:
+            ax.axvline(x=input_df[feature].values[0], color='darkorange', linewidth=2, label=f"User Input {feature}")
+
+        # Set legend and title
+        ax.legend(loc='upper right')
+        ax.set_title(f"{feature} Distribution")
+
+        # Display the plot in Streamlit
+        st.pyplot(fig)
+
+    # Back button to return to the Main Page
+    if st.button("Back to Main Page"):
+        st.session_state["page"] = "Main Page"
+        st.session_state["prediction_made"] = True
